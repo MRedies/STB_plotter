@@ -1,7 +1,10 @@
 # import matplotlib as mpl
 # mpl.use('Qt4Agg')
+import ConfigParser
+import StringIO
 import numpy as np
 import matplotlib.pyplot as plt
+import re
 
 def calc_kpts(n_sec, pts_per_sec):
     return n_sec * (pts_per_sec - 1) + 1
@@ -13,8 +16,16 @@ def calc_tick_pos(n_sec, pts_per_sec):
     return ticks
 
 
+def get_unit(data, name):
+    p = re.compile("\s*?energy\s*?=\s*?'(.*?)'")
+    cfg = data['input.cfg']
+    for line in cfg.split("\n"):
+        if p.match(line) != None:
+            return p.search(line).group(0).split("'")[1]
+
 def plot_square_lattice(data, linesty='', 
-                        fig_sz=(8,6), axis=None, linelabel=None):
+                        fig_sz=(8,6), axis=None, linelabel=None,
+                        n_bands=8):
     if axis == None:
 	fig, axis = plt.subplots(figsize=fig_sz)
     else: 
@@ -24,20 +35,30 @@ def plot_square_lattice(data, linesty='',
     ticks = calc_tick_pos(3, n_ktps)
     label = ["$\Gamma$", "X", "M", "$\Gamma$"]
     E = data['band_E']
-    E_fermi = data['E_fermi'][0]
+    E = np.transpose(E)
+
+    if("E_fermi" in data.files):
+        E_fermi = data['E_fermi'][0]
+    else: 
+        E_fermi = None
+    
     print(E.shape)
-    E = E[:,:8]
+    E = E[:,:n_bands]
     k = np.arange(E.shape[0])
     if linelabel == None:
 	axis.plot(k,E, linesty)
-        axis.plot(k,np.ones(np.shape(k)) * E_fermi)
+        if(E_fermi != None):
+            axis.plot(k,np.ones(np.shape(k)) * E_fermi)
     else:
 	axis.plot(k,E, linesty, label=linelabel)
-        axis.plot(k,np.ones(np.shape(k)) * E_fermi)
+        if(E_fermi != None):
+            axis.plot(k,np.ones(np.shape(k)) * E_fermi)
 
     axis.set_xticks(ticks)
     axis.set_xticklabels(label)
+    axis.set_ylabel(get_unit(data, 'energy'), fontsize=15)
     axis.set_ylim([np.min(E), np.max(E)])
+    axis.xaxis.grid(True)
 
     return fig, axis
 
