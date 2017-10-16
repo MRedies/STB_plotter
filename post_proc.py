@@ -36,8 +36,7 @@ def get_unit(folder, name):
 
 
 def plot_square_lattice(root, linesty='', 
-                        figsize=(8,6), axis=None, linelabel=None,
-                        n_bands=8):
+        figsize=(8,6), axis=None, linelabel=None):
     if axis is None:
 	fig, axis = plt.subplots(figsize=figsize)
     else: 
@@ -56,7 +55,6 @@ def plot_square_lattice(root, linesty='',
         E_fermi = None
     
     #print(E.shape)
-    E = E[:,:n_bands]
     k = np.arange(E.shape[0])
     if linelabel is None:
 	axis.plot(k,E, linesty)
@@ -69,7 +67,7 @@ def plot_square_lattice(root, linesty='',
 
     axis.set_xticks(ticks)
     axis.set_xticklabels(label)
-    axis.set_ylabel(get_unit(data, 'energy'), fontsize=fontsize)
+    axis.set_ylabel(get_unit(root, 'energy'), fontsize=25)
     axis.set_ylim([np.min(E), np.max(E)])
     axis.xaxis.grid(True)
 
@@ -294,15 +292,20 @@ def plot_orbmag(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, labels=[
 	fig, axis = plt.subplots(figsize=figsize)
 
     E = np.load(folder + "orbmag_E.npy")
+    if(xlim is None):
+        sel = np.arange(E.shape[0])
+    else:
+        sel = np.argwhere(np.logical_and(E>=xlim[0], E<=xlim[1]))
+    
     if(which.upper() == "M" or which.upper()=="ALL"):
         om = np.load(folder + "orbmag.npy")
-        axis.plot(E,om, linesty, linewidth=linewidth, label=labels[2])
+        axis.plot(E[sel],om[sel], linesty, linewidth=linewidth, label=labels[2])
     if(which.upper() == "L" or which.upper()=="ALL"):
         L = np.load(folder + "orbmag_L.npy")
-        axis.plot(E,L, linesty, linewidth=linewidth, label=labels[0])
+        axis.plot(E[sel],L[sel], linesty, linewidth=linewidth, label=labels[0])
     if(which.upper() == "IC" or which.upper()=="ALL"):
         IC = np.load(folder + "orbmag_IC.npy")
-        axis.plot(E,IC, linesty, linewidth=linewidth, label=labels[1])
+        axis.plot(E[sel],IC[sel], linesty, linewidth=linewidth, label=labels[1])
 
     axis.set_ylabel(r"M/$\mu_b$", fontsize=fontsize)
     axis.set_xlabel(r"eV", fontsize=fontsize)
