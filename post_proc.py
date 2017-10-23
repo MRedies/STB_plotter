@@ -265,14 +265,14 @@ def plot_loc_dos_surf(folder, E_window, figsize=(8,8), axis=None,
     axis.plot_trisurf(x,y,loc_dos, cmap=cmap,
                        linewidth=0, antialiased=False)
 
-def plot_hall(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, fontsize=16, linesty='', linewidth=1, label="$\sigma_{xy}$"):
+def plot_hall(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, fontsize=16, linesty='', linewidth=1, label="$\sigma_{xy}$", color=None):
     if axis is None:
 	fig, axis = plt.subplots(figsize=figsize)
 
     E = np.load(folder + "hall_cond_E.npy")
     c = np.load(folder + "hall_cond.npy")
 
-    axis.plot(E,c, linesty, linewidth=linewidth, label=label)
+    axis.plot(E,c, linesty, linewidth=linewidth, label=label, color=color)
     axis.set_ylabel(r"$\sigma_{xy}$", fontsize=fontsize)
     axis.set_xlabel(r"eV", fontsize=fontsize)
     axis.set_title(r"Hall conductance", fontsize=fontsize)
@@ -287,7 +287,7 @@ def plot_hall(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, fontsize=1
 
 
 def plot_orbmag(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, labels=["L", "IC", "M"],
-        fontsize=16, linesty='', linewidth=1, which="ALL"):
+        fontsize=16, linesty='', linewidth=1, which="ALL", color=None):
     if axis is None:
 	fig, axis = plt.subplots(figsize=figsize)
 
@@ -299,13 +299,13 @@ def plot_orbmag(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, labels=[
     
     if(which.upper() == "M" or which.upper()=="ALL"):
         om = np.load(folder + "orbmag.npy")
-        axis.plot(E[sel],om[sel], linesty, linewidth=linewidth, label=labels[2])
+        axis.plot(E[sel],om[sel], linesty, linewidth=linewidth, label=labels[2], color=color)
     if(which.upper() == "L" or which.upper()=="ALL"):
         L = np.load(folder + "orbmag_L.npy")
-        axis.plot(E[sel],L[sel], linesty, linewidth=linewidth, label=labels[0])
+        axis.plot(E[sel],L[sel], linesty, linewidth=linewidth, label=labels[0], color=color)
     if(which.upper() == "IC" or which.upper()=="ALL"):
         IC = np.load(folder + "orbmag_IC.npy")
-        axis.plot(E[sel],IC[sel], linesty, linewidth=linewidth, label=labels[1])
+        axis.plot(E[sel],IC[sel], linesty, linewidth=linewidth, label=labels[1], color=color)
 
     axis.set_ylabel(r"M/$\mu_b$", fontsize=fontsize)
     axis.set_xlabel(r"eV", fontsize=fontsize)
