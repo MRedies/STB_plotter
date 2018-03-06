@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import re
 import matplotlib.tri as tri
+from glob import glob
 
 def calc_kpts(n_sec, pts_per_sec):
     return n_sec * (pts_per_sec - 1) + 1
@@ -35,11 +36,11 @@ def get_unit(folder, name):
     return " "
 
 
-def plot_square_lattice(root, linesty='', 
+def plot_square_lattice(root, linesty='',
         figsize=(8,6), axis=None, linelabel=None):
     if axis is None:
         fig, axis = plt.subplots(figsize=figsize)
-    else: 
+    else:
         fig = None
     #data = np.load(filename)
     E = np.load(root + 'band_E.npy')
@@ -77,14 +78,14 @@ def plot_hex_lattice(root, linesty='', ylim=None, linewidth=1, fontsize=16,
         figsize=(8,6), axis=None, linelabel=None):
     if axis is None:
         fig, axis = plt.subplots(figsize=figsize)
-    else: 
+    else:
         fig = None
     E = np.load(root + 'band_E.npy')
     E = np.transpose(E)
 
     if ylim is None:
         ylim = np.array([np.min(E), np.max(E)])
-    sel = np.logical_and(np.any(E >= ylim[0], axis=0) 
+    sel = np.logical_and(np.any(E >= ylim[0], axis=0)
             , np.any(E <= ylim[1], axis=0))
     E = E[:,sel]
 
@@ -111,7 +112,7 @@ def plot_hex_lattice(root, linesty='', ylim=None, linewidth=1, fontsize=16,
     axis.tick_params(labelsize=fontsize)
     axis.set_xticks(ticks)
     axis.set_xticklabels(label)
-    axis.set_ylabel(get_unit(root, 'energy'), fontsize=25)
+    axis.set_ylabel(get_unit(root, 'energy'), fontsize=int(1.5*fontsize))
     axis.set_ylim(ylim)
     axis.xaxis.grid(True)
 
@@ -181,13 +182,13 @@ def y_cut_idx(folder):
     x = np.load(folder + "pos_x.npy")
     y = np.load(folder + "pos_y.npy")
     return np.argwhere(np.abs(x) < 1e-6)
-#return np.argwhere(np.logical_and((np.abs(x) < 1e-6), y < 0.0)) 
+#return np.argwhere(np.logical_and((np.abs(x) < 1e-6), y < 0.0))
 
 
 def plot_mag_cut(folder, figsize=(8,6), axis=None, fontsize=16):
     if axis is None:
         fig, axis = plt.subplots(figsize=figsize)
-    else: 
+    else:
         fig = None
     cut = y_cut_idx(folder)
     x   = np.load(folder + "pos_x.npy")[cut]
@@ -250,7 +251,7 @@ def plot_loc_dos(folder, E_window, figsize=(8,8), axis=None, fig=None, n_lvls=20
 
     fig.colorbar(cbar, ax=axis)
 
-def plot_loc_dos_surf(folder, E_window, figsize=(8,8), axis=None, 
+def plot_loc_dos_surf(folder, E_window, figsize=(8,8), axis=None,
         fig=None, n_lvls=20, lvls=None, cmap=plt.cm.coolwarm):
     if axis is None:
         fig = plt.figure()
@@ -265,12 +266,16 @@ def plot_loc_dos_surf(folder, E_window, figsize=(8,8), axis=None,
     axis.plot_trisurf(x,y,loc_dos, cmap=cmap,
             linewidth=0, antialiased=False)
 
-    def plot_hall(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, fontsize=16, linesty='', linewidth=1, label="$\sigma_{xy}$", color=None):
-        if axis is None:
-            fig, axis = plt.subplots(figsize=figsize)
+def plot_hall(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, fontsize=16, linesty='', linewidth=1, label="$\sigma_{xy}$", color=None):
+    if axis is None:
+        fig, axis = plt.subplots(figsize=figsize)
 
     E = np.load(folder + "hall_cond_E.npy")
-    c = np.load(folder + "hall_cond.npy")
+    try:
+        c = np.load(folder + "hall_cond.npy")
+    except:
+        cf = sorted(glob(folder + "hall_cond_iter*.npy"))[-1]
+        c = np.load(cf)
 
     axis.plot(E,c, linesty, linewidth=linewidth, label=label, color=color)
     axis.set_ylabel(r"$\sigma_{xy}$", fontsize=fontsize)
@@ -287,7 +292,7 @@ def plot_loc_dos_surf(folder, E_window, figsize=(8,8), axis=None,
 
 
 def plot_orbmag(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, labels=["L", "IC", "M"],
-        fontsize=16, linesty='', linewidth=1, which="ALL", color=None):
+        fontsize=16, linesty=['','--', '--'], linewidth=1, which="ALL", color=None):
     if axis is None:
         fig, axis = plt.subplots(figsize=figsize)
 
@@ -297,15 +302,29 @@ def plot_orbmag(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, labels=[
     else:
         sel = np.argwhere(np.logical_and(E>=xlim[0], E<=xlim[1]))
 
-    if(which.upper() == "M" or which.upper()=="ALL"):
-        om = np.load(folder + "orbmag.npy")
-        axis.plot(E[sel],om[sel], linesty, linewidth=linewidth, label=labels[2], color=color)
     if(which.upper() == "L" or which.upper()=="ALL"):
         L = np.load(folder + "orbmag_L.npy")
-        axis.plot(E[sel],L[sel], linesty, linewidth=linewidth, label=labels[0], color=color)
+        try:
+            L = np.load(folder + "orbmag_L.npy")
+        except:
+            L = sorted(glob(folder + "orbmag_L_iter*.npy"))[-1]
+            L = np.load(L)
+        axis.plot(E[sel],L[sel], linesty[1], linewidth=linewidth, label=labels[0], color=color)
+
     if(which.upper() == "IC" or which.upper()=="ALL"):
-        IC = np.load(folder + "orbmag_IC.npy")
-        axis.plot(E[sel],IC[sel], linesty, linewidth=linewidth, label=labels[1], color=color)
+        try:
+            IC = np.load(folder + "orbmag_IC.npy")
+        except:
+            IC = sorted(glob(folder + "orbmag_IC_iter*.npy"))[-1]
+            IC = np.load(IC)
+        axis.plot(E[sel],IC[sel], linesty[2], linewidth=linewidth, label=labels[1], color=color)
+    if(which.upper() == "M" or which.upper()=="ALL"):
+        try:
+            om = np.load(folder + "orbmag.npy")
+        except:
+            om = sorted(glob(folder + "orbmag_iter*.npy"))[-1]
+            om = np.load(om)
+        axis.plot(E[sel],om[sel], linesty[0], linewidth=linewidth, label=labels[2], color=color)
 
     axis.set_ylabel(r"M/$\mu_b$", fontsize=fontsize)
     axis.set_xlabel(r"eV", fontsize=fontsize)
@@ -325,7 +344,7 @@ def N_sk(fol, dims=None):
             dims = (sqr, sqr)
         else:
             raise ValueError("need to specifiy non-square dims")
-                
+
     r = np.zeros((dims[0], dims[1],3))
     r[:,:,0]     = np.load(fol + "pos_x.npy").reshape(dims, order="F")
     r[:,:,1]     = np.load(fol + "pos_y.npy").reshape(dims, order="F")
@@ -349,3 +368,19 @@ def N_sk(fol, dims=None):
             summe += np.inner(m[i,j,:], cro[i,j,:])
     summe *= 1.0/(4.0*np.pi)
     return summe
+
+def plot_ACA(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, label="ACA",
+        fontsize=16, linesty=[''], linewidth=1, color=None):
+    if axis is None:
+        fig, axis = plt.subplots(figsize=figsize)
+
+    E = np.load(folder + "orbmag_E.npy")
+    if(xlim is None):
+        sel = np.arange(E.shape[0])
+    else:
+        sel = np.argwhere(np.logical_and(E>=xlim[0], E<=xlim[1]))
+
+    om = np.load(folder + "orbmag_ACA.npy")
+    axis.plot(E[sel],om[sel], linesty[0], linewidth=linewidth, label=label, color=color)
+    axis.set_xlabel(r"eV", fontsize=fontsize)
+    axis.set_ylabel(r"$\mu_b$", fontsize=fontsize)
