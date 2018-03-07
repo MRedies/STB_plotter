@@ -206,6 +206,32 @@ def plot_mag_cut(folder, figsize=(8,6), axis=None, fontsize=16):
     axis.set_aspect('equal', 'datalim')
     axis.tick_params(labelsize=fontsize)
 
+def plot_mag_cut_v(folder, figsize=(8,6), axis=None, fontsize=16, ylim=None):
+    if axis is None:
+        fig, axis = plt.subplots(figsize=figsize)
+    else:
+        fig = None
+    cut = y_cut_idx(folder)
+    x   = np.load(folder + "pos_x.npy")[cut]
+    y   = np.load(folder + "pos_y.npy")[cut]
+    theta = np.load(folder + "m_theta.npy")[cut]
+    phi = np.load(folder + "m_phi.npy")[cut]
+
+
+    r = 1.0
+    m_y = np.sin(theta) * np.sin(phi)
+    m_z = np.cos(theta)
+
+    axis.quiver(x, y, m_z, m_y, pivot="mid", scale=1.5, width=0.06)
+    #axis.plot(x, y,"r.", markersize=3)
+    axis.set_aspect('equal', 'datalim')
+    axis.tick_params(labelsize=fontsize)
+    axis.set_xticks([])
+    axis.set_yticks([])
+
+    if(not(ylim is None)):
+        axis.set_ylim(ylim)
+
 
 def calc_local_dos(folder, E_window):
     pdos = np.load(folder + "DOS_partial.npy")
@@ -222,7 +248,7 @@ def calc_local_dos(folder, E_window):
 
 
     n_band = pdos.shape[0]
-    n_loc = n_band /2
+    n_loc = int(n_band /2)
     loc_dos = pdos[:n_loc,l_cut:u_cut] + pdos[n_loc:,l_cut:u_cut]
 
     integr = np.zeros(loc_dos.shape[0])
@@ -231,7 +257,7 @@ def calc_local_dos(folder, E_window):
     return integr
 
 def plot_loc_dos(folder, E_window, figsize=(8,8), axis=None, fig=None, n_lvls=20,
-        lvls=None, cmap=plt.cm.viridis):
+        lvls=None, cmap=plt.cm.viridis, fontsize=16):
     if axis is None:
         fig, axis = plt.subplots(figsize=figsize)
 
@@ -239,17 +265,33 @@ def plot_loc_dos(folder, E_window, figsize=(8,8), axis=None, fig=None, n_lvls=20
     x = np.load(folder + "pos_x.npy")
     y = np.load(folder + "pos_y.npy")
     if(lvls is None):
-        lvls = np.linspace(np.min(loc_dos), np.max(loc_dos), n_lvls)
+        #lvls = np.linspace(np.min(loc_dos), np.max(loc_dos), n_lvls)
+        lvls = np.linspace(0.0, np.max(loc_dos), n_lvls)
+
+    lvls = np.unique(np.round(lvls, decimals=2))
+
 
     triang = tri.Triangulation(x, y)
     cbar = axis.tricontourf(triang, loc_dos,levels=lvls, cmap=cmap)
     axis.set_aspect('equal')
 
     cut = y_cut_idx(folder)
-    axis.plot(x[cut], y[cut], 'g', linewidth=1)
-    axis.plot(x,y, 'r.', markersize=2)
+    axis.plot(x[cut], y[cut], 'C1', linewidth=1)
+    #axis.plot(x,y, 'r.', markersize=1.5)
 
-    fig.colorbar(cbar, ax=axis)
+    # axis.set_xlabel(r"$x/a_0$", fontsize=fontsize)
+    # axis.set_ylabel(r"$y/a_0$", fontsize=fontsize)
+
+    for tick in axis.xaxis.get_major_ticks():
+                tick.label.set_fontsize(int(0.8*fontsize))
+    for tick in axis.yaxis.get_major_ticks():
+                tick.label.set_fontsize(int(0.8*fontsize))
+
+
+    cb = fig.colorbar(cbar, ax=axis, ticks=lvls[::3])
+    cb.ax.tick_params(labelsize=int(0.7*fontsize))
+
+    return axis.get_xlim(), axis.get_ylim()
 
 def plot_loc_dos_surf(folder, E_window, figsize=(8,8), axis=None,
         fig=None, n_lvls=20, lvls=None, cmap=plt.cm.coolwarm):
@@ -384,3 +426,11 @@ def plot_ACA(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, label="ACA"
     axis.plot(E[sel],om[sel], linesty[0], linewidth=linewidth, label=label, color=color)
     axis.set_xlabel(r"eV", fontsize=fontsize)
     axis.set_ylabel(r"$\mu_b$", fontsize=fontsize)
+
+def plot_dbl_ldos(folder, e_range, figsize=(10,8), ax1=None, ax2=None, fig=None,
+                    cmap=plt.cm.viridis, fontsize=16):
+    if((ax1 is None) or (ax2 is None) or (fig is None)):
+        fig, (ax1, ax2) = plt.subplots(1,2, figsize=figsize)#,
+                                       #gridspec_kw = {'width_ratios':[3, 1]})
+    _, y_lim = plot_loc_dos(folder, e_range, cmap=cmap, axis=ax1, fig=fig, fontsize=fontsize)
+    plot_mag_cut_v(folder, axis=ax2, fontsize=fontsize, ylim=y_lim)
