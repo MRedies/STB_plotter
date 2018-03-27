@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import re
 import matplotlib.tri as tri
+import matplotlib.image as mpimg
 from glob import glob
 
 def calc_kpts(n_sec, pts_per_sec):
@@ -37,7 +38,7 @@ def get_unit(folder, name):
 
 
 def plot_square_lattice(root, linesty='',
-        figsize=(8,6), axis=None, linelabel=None):
+        figsize=(8,6), axis=None, linelabel=None, color=None):
     if axis is None:
         fig, axis = plt.subplots(figsize=figsize)
     else:
@@ -47,7 +48,6 @@ def plot_square_lattice(root, linesty='',
     E = np.transpose(E)
     n_ktps = (E.shape[0]+2)/3
     ticks = calc_tick_pos(3, n_ktps)
-    #print( ticks)
     label = ["$\Gamma$", "X", "M", "$\Gamma$"]
 
     try:
@@ -55,21 +55,21 @@ def plot_square_lattice(root, linesty='',
     except:
         E_fermi = None
 
-    #print(E.shape)
     k = np.arange(E.shape[0])
     if linelabel is None:
-        axis.plot(k,E, linesty)
+        axis.plot(k,E, linesty, color=color)
         if(E_fermi != None):
-            axis.plot(k,np.ones(np.shape(k)) * E_fermi)
+            axis.plot(k,np.ones(np.shape(k)) * E_fermi, color=color)
     else:
-        axis.plot(k,E, linesty, label=linelabel)
+        axis.plot(k,E, linesty, label=linelabel, color=color)
         if(E_fermi != None):
-            axis.plot(k,np.ones(np.shape(k)) * E_fermi)
+            axis.plot(k,np.ones(np.shape(k)) * E_fermi, color=color)
 
     axis.set_xticks(ticks)
     axis.set_xticklabels(label)
     axis.set_ylabel(get_unit(root, 'energy'), fontsize=25)
-    axis.set_ylim([np.min(E), np.max(E)])
+    dE = np.max([np.max(E) - np.min(E), 0.01])
+    axis.set_ylim([np.min(E)-0.03*dE, np.max(E)+0.03*dE])
     axis.xaxis.grid(True)
 
     return fig, axis
@@ -256,8 +256,14 @@ def calc_local_dos(folder, E_window):
         integr[i] = inte_dos(loc_dos[i,:], Edos)
     return integr
 
+def round_mag(x, decimals=0):
+    res = np.zeros(x.shape)
+    mag    = int(np.floor(-np.log10(np.max(x))))
+
+    return np.round(x, decimals=mag+decimals)
+
 def plot_loc_dos(folder, E_window, figsize=(8,8), axis=None, fig=None, n_lvls=20,
-        lvls=None, cmap=plt.cm.viridis, fontsize=16):
+        lvls=None, cmap=plt.cm.viridis, fontsize=16, lw=1):
     if axis is None:
         fig, axis = plt.subplots(figsize=figsize)
 
@@ -268,15 +274,14 @@ def plot_loc_dos(folder, E_window, figsize=(8,8), axis=None, fig=None, n_lvls=20
         #lvls = np.linspace(np.min(loc_dos), np.max(loc_dos), n_lvls)
         lvls = np.linspace(0.0, np.max(loc_dos), n_lvls)
 
-    lvls = np.unique(np.round(lvls, decimals=2))
-
+    lvls = np.unique(round_mag(lvls, decimals=2))
 
     triang = tri.Triangulation(x, y)
     cbar = axis.tricontourf(triang, loc_dos,levels=lvls, cmap=cmap)
     axis.set_aspect('equal')
 
     cut = y_cut_idx(folder)
-    axis.plot(x[cut], y[cut], 'C1', linewidth=1)
+    axis.plot(x[cut], y[cut], 'C1', linewidth=lw)
     #axis.plot(x,y, 'r.', markersize=1.5)
 
     # axis.set_xlabel(r"$x/a_0$", fontsize=fontsize)
@@ -345,7 +350,6 @@ def plot_orbmag(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, labels=[
         sel = np.argwhere(np.logical_and(E>=xlim[0], E<=xlim[1]))
 
     if(which.upper() == "L" or which.upper()=="ALL"):
-        L = np.load(folder + "orbmag_L.npy")
         try:
             L = np.load(folder + "orbmag_L.npy")
         except:
@@ -428,9 +432,56 @@ def plot_ACA(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, label="ACA"
     axis.set_ylabel(r"$\mu_b$", fontsize=fontsize)
 
 def plot_dbl_ldos(folder, e_range, figsize=(10,8), ax1=None, ax2=None, fig=None,
-                    cmap=plt.cm.viridis, fontsize=16):
+                    cmap=plt.cm.viridis, fontsize=16, lw=1):
     if((ax1 is None) or (ax2 is None) or (fig is None)):
         fig, (ax1, ax2) = plt.subplots(1,2, figsize=figsize)#,
                                        #gridspec_kw = {'width_ratios':[3, 1]})
-    _, y_lim = plot_loc_dos(folder, e_range, cmap=cmap, axis=ax1, fig=fig, fontsize=fontsize)
+    _, y_lim = plot_loc_dos(folder, e_range, cmap=cmap, axis=ax1, fig=fig, fontsize=fontsize, lw=lw)
     plot_mag_cut_v(folder, axis=ax2, fontsize=fontsize, ylim=y_lim)
+
+def plot_DOS(folder, figsize=(8,8), axis=None, linewidth=2, fontsize=16, linesty=''):
+    if(axis is None):
+        fig, axis = plt.subplots(1,1, figsize=figsize)
+
+    E   = np.load(folder + "DOS_E.npy")
+    DOS = np.load(folder + "DOS.npy")
+
+    axis.plot(E, DOS, linesty, linewidth=linewidth)
+    axis.set_xlabel("Energy in eV", fontsize=fontsize)
+    axis.set_ylabel("DOS", fontsize=fontsize)
+    
+    if(np.max(DOS) > 0.01):
+        axis.set_ylim([-0.01, 1.1*np.max(DOS)])
+    else:
+        axis.set_ylim([-0.01, 0.01])
+
+    axis.set_xlim([np.min(E), np.max(E)])
+    axis.tick_params(labelsize=int(0.9*fontsize))
+
+
+def plot_S(folder, figsize=(8,8), axis=None, linewidth=2, fontsize=16, linesty=''):
+    if(axis is None):
+        fig, axis = plt.subplots(1,1, figsize=figsize)
+    
+    E = np.load(folder + "spinmag_E.npy")
+    S = np.load(folder + "spinmag.npy")
+
+    axis.plot(E,S, linesty, linewidth=linewidth)
+    axis.set_xlabel("Energy in eV", fontsize=fontsize)
+    axis.set_ylabel("S", fontsize=fontsize)
+
+    axis.set_xlim([np.min(E), np.max(E)])
+    
+    upper = np.max([0.01, 1.1*np.max(S)])
+    lower = np.min([-0.01,1.1*np.min(S)])
+    axis.set_ylim([lower, upper])
+    axis.tick_params(labelsize=int(0.9*fontsize))
+
+
+def show_image(fol, ax=None, figsize=(8,8), fontsize=16):
+    img=mpimg.imread(fol + 'render.png')
+    if(ax is None):
+        _, ax = plt.subplots(1,1, figsize=figsize)
+    ax.imshow(img)
+
+    ax.set_title(fol, fontsize=fontsize)
