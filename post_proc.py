@@ -588,41 +588,6 @@ def mynote_rel(axis, text, x_rel=0.05 , y_rel=0.92, fontsize=16):
 
     bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
     axis.text(x, y, text, ha="center", va="center", size=fontsize, bbox=bbox_props)
-    
-def scalar_chiral_value(folder):
-    x = np.load(folder + "pos_x.npy")
-    y = np.load(folder + "pos_y.npy")
-    z = np.load(folder + "pos_z.npy")
-    n_atm = x.shape[0]
-
-    pos = np.zeros((n_atm, 3))
-    pos[:,0] = x
-    pos[:,1] = y
-    pos[:,2] = z
-
-    m_phi   = np.load(folder + "m_phi.npy")
-    m_theta = np.load(folder + "m_theta.npy")
-
-    mag = np.zeros((n_atm, 3))
-    mag[:,0] = np.sin(m_theta) * np.cos(m_phi)
-    mag[:,1] = np.sin(m_theta) * np.sin(m_phi)
-    mag[:,2] = np.cos(m_theta)
-
-    scalar = 0.0
-    for i in range(n_atm):
-        dist = np.sum((pos - pos[i,:])**2, axis=1)
-        
-        idx = np.argwhere(np.abs(dist - 1.0) < 0.01)
-        
-
-        for comb in combinations(idx, 2):
-            c = mag[comb[0][0]]
-            b = mag[comb[1][0]]
-            a = mag[i]
-            
-            scalar += np.dot(a, np.cross(b, c))
-            #print(np.dot(a, np.cross(b, c)))
-    return scalar
 
 
 def plot_DOS_xz(folder, y_val, E_range, axis=None, fig=None,  fontsize=16, nlvls=10, color_range=None):
