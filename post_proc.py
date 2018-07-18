@@ -236,28 +236,30 @@ def plot_mag_cut_v(folder, figsize=(8,6), axis=None, fontsize=16, ylim=None):
         axis.set_ylim(ylim)
 
 
-def calc_local_dos(folder, E_window):
+def calc_LDOS(folder, E_window):
     pdos = np.load(folder + "DOS_partial.npy")
     Edos = np.load(folder + "DOS_E.npy")
-    cut = np.argwhere(np.logical_and(Edos >= E_window[0], Edos <= E_window[1]))
-    try:
-        l_cut = np.min(cut)
-        u_cut = np.max(cut)+1
-    except:
-        print("No data in Energy window")
-        return None
+    cut = np.where(np.logical_and(Edos >= E_window[0], Edos <= E_window[1]))
 
-    Edos = Edos[l_cut:u_cut]
+    Edos = Edos[cut]
+    pdos = pdos[:,cut][:,0,:]
+    
+    h = (Edos[-1] - Edos[0]) / len(Edos)
+    trapez_weights     =  np.ones(pdos.shape[1]) * h
+    trapez_weights[0]  *= 0.5
+    trapez_weights[-1] *= 0.5
+    pdos = np.dot(pdos, trapez_weights)
 
+    n_band  = pdos.shape[0]
+    n_up    = int(n_band /2)
+    loc_dos = np.zeros(int(n_band/6))
+    cnt     = 0
+    for i in range(0, n_up,3):
+        i_down = i + n_up
+        loc_dos[cnt] = np.sum(pdos[i:i+2]) + np.sum(pdos[i_down:i_down+2])
+        cnt += 1
 
-    n_band = pdos.shape[0]
-    n_loc = int(n_band /2)
-    loc_dos = pdos[:n_loc,l_cut:u_cut] + pdos[n_loc:,l_cut:u_cut]
-
-    integr = np.zeros(loc_dos.shape[0])
-    for i in range(loc_dos.shape[0]):
-        integr[i] = inte_dos(loc_dos[i,:], Edos)
-    return integr
+    return loc_dos
 
 def round_mag(x, decimals=0):
     res = np.zeros(x.shape)
@@ -270,7 +272,7 @@ def plot_loc_dos(folder, E_window, figsize=(8,8), axis=None, fig=None, n_lvls=20
     if axis is None:
         fig, axis = plt.subplots(figsize=figsize)
 
-    loc_dos = calc_local_dos(folder, E_window)
+    loc_dos = calc_LDOS(folder, E_window)
     x = np.load(folder + "pos_x.npy")
     y = np.load(folder + "pos_y.npy")
     if(lvls is None):
@@ -307,7 +309,7 @@ def plot_loc_dos_surf(folder, E_window, figsize=(8,8), axis=None,
         fig = plt.figure()
         axis = fig.gca(projection='3d')
 
-    loc_dos = calc_local_dos(folder, E_window)
+    loc_dos = calc_LDOS(folder, E_window)
     x = np.load(folder + "pos_x.npy")
     y = np.load(folder + "pos_y.npy")
     if(lvls is None):
@@ -471,32 +473,6 @@ def layer_winding(m):
     summe *= 1.0/(4.0*np.pi)
     return summe
 
-def winding_layer_wise(fol):
-    n_atm = np.load(fol + "pos_x.npy").shape[0]
-
-    pos = np.zeros((n_atm, 3))
-    pos[:,0] = np.load(fol + "pos_x.npy")
-    pos[:,1] = np.load(fol + "pos_y.npy")
-    pos[:,2] = np.load(fol + "pos_z.npy")
-
-    dim = [np.unique(pos[:,0]).shape[0],
-           np.unique(pos[:,1]).shape[0],
-           np.unique(pos[:,2]).shape[0]]
-    
-    phi   = np.load(fol + "m_phi.npy").reshape(dim,   order="F")
-    theta = np.load(fol + "m_theta.npy").reshape(dim, order="F")
-
-    m = np.zeros((dim[0], dim[1], dim[2] ,3))
-    m[:,:,:,0] = np.sin(theta) * np.cos(phi)
-    m[:,:,:,1] = np.sin(theta) * np.sin(phi)
-    m[:,:,:,2] = np.cos(theta)
-
-    summe = 0
-    for i in range(dim[2]):
-        summe += layer_winding(m[:,:,i,:])
-    
-    return summe
-
 def plot_ACA(folder, figsize=(8,8), axis=None, xlim=None, ylim=None, label="ACA",
         fontsize=16, linesty=[''], linewidth=1, color=None):
     if axis is None:
@@ -521,14 +497,14 @@ def plot_dbl_ldos(folder, e_range, figsize=(10,8), ax1=None, ax2=None, fig=None,
     _, y_lim = plot_loc_dos(folder, e_range, cmap=cmap, axis=ax1, fig=fig, fontsize=fontsize, lw=lw)
     plot_mag_cut_v(folder, axis=ax2, fontsize=fontsize, ylim=y_lim)
 
-def plot_DOS(folder, figsize=(8,8), axis=None, linewidth=2, fontsize=16, linesty=''):
+def plot_DOS(folder, figsize=(8,8), axis=None, linewidth=2, label=None, fontsize=16, linesty=''):
     if(axis is None):
         fig, axis = plt.subplots(1,1, figsize=figsize)
 
     E   = np.load(folder + "DOS_E.npy")
     DOS = np.load(folder + "DOS.npy")
 
-    axis.plot(E, DOS, linesty, linewidth=linewidth)
+    axis.plot(E, DOS, linesty, linewidth=linewidth, label=label)
     axis.set_xlabel("Energy in eV", fontsize=fontsize)
     axis.set_ylabel("DOS", fontsize=fontsize)
     
@@ -576,7 +552,7 @@ def mynote(axis, x, y, text, fontsize=16):
     bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
     axis.text(x, y, text, ha="center", va="center", size=fontsize, bbox=bbox_props)
 
-def mynote_rel(axis, text, x_rel=0.05 , y_rel=0.92, fontsize=16):
+def mynote_rel(axis, text, x_rel=0.05 , y_rel=0.92, fontsize=16, make_box=True):
     x_min, x_max = axis.get_xlim()
     y_min, y_max = axis.get_ylim()
 
@@ -586,7 +562,10 @@ def mynote_rel(axis, text, x_rel=0.05 , y_rel=0.92, fontsize=16):
     x = x_min + x_rel * dx
     y = y_min + y_rel * dy
 
-    bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
+    if(make_box):
+        bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
+    else:
+        bbox_props = None
     axis.text(x, y, text, ha="center", va="center", size=fontsize, bbox=bbox_props)
 
 
@@ -644,18 +623,8 @@ def plot_DOS_xz(folder, y_val, E_range, axis=None, fig=None,  fontsize=16, nlvls
     axis.set_ylim=([-0.5, 29.5])
     axis.tick_params(labelsize=fontsize)
 
-def plot_DOS_yz(folder, x_val, E_range, axis=None, fig=None, fontsize=16, nlvls=10, color_range=None):
-    E = np.load(folder + "DOS_E.npy")
-    PDOS = np.load(folder + "DOS_partial.npy")
-    sel = np.where(np.logical_and(E >= E_range[0], E <= E_range[1]))
-    PDOS = PDOS[:,sel][:,0,:]
-    PDOS = np.sum(PDOS, axis=1)
-
-    N = int(PDOS.shape[0]/6)
-    LDOS = np.zeros(N)
-    for n,i in enumerate(range(0, 3*N, 3)):
-        LDOS[n] = np.sum(PDOS[i:i+3]) + np.sum(PDOS[i+3*N:i+3*N+3])
-
+def plot_DOS_yz(folder, x_val, E_range, axis=None, fig=None, fontsize=16, nlvls=10, color_range=None, soll_shape=(30,14)):
+    LDOS = calc_LDOS(folder, E_range)
     x     = np.load(folder + "pos_x.npy")
     y     = np.load(folder + "pos_y.npy")
     z     = np.load(folder + "pos_z.npy")
@@ -664,8 +633,6 @@ def plot_DOS_yz(folder, x_val, E_range, axis=None, fig=None, fontsize=16, nlvls=
 
 
     sel = np.abs(x-x_val) < 1e-6
-
-    soll_shape = (30,14)
 
     LDOS  = LDOS[sel].reshape(soll_shape)
     x     = x[sel].reshape(soll_shape)
@@ -676,13 +643,12 @@ def plot_DOS_yz(folder, x_val, E_range, axis=None, fig=None, fontsize=16, nlvls=
 
     m_y  = np.sin(theta) * np.sin(phi)
     m_z  = np.cos(theta)
+
+
     if(color_range is None):
         lvls = np.linspace(np.min(LDOS), np.max(LDOS), nlvls)
     else:
         lvls = np.linspace(color_range[0], color_range[1], nlvls)
-
-    lvls = np.round(lvls, decimals=3)
-
     if(axis is None):
         _, axis = plt.subplots(1,1)
     
@@ -701,17 +667,7 @@ def plot_DOS_yz(folder, x_val, E_range, axis=None, fig=None, fontsize=16, nlvls=
 
 
 def plot_DOS_z_vert(folder, E_range, axis=None, fontsize=16, xlim=None, linewidth=1, linesty=''):
-    E = np.load(folder + "DOS_E.npy")
-    PDOS = np.load(folder + "DOS_partial.npy")
-    sel = np.where(np.logical_and(E >= E_range[0], E <= E_range[1]))
-    PDOS = PDOS[:,sel][:,0,:]
-    PDOS = np.sum(PDOS, axis=1)
-
-    N = int(PDOS.shape[0]/6)
-    LDOS = np.zeros(N)
-    for n,i in enumerate(range(0, 3*N, 3)):
-        LDOS[n] = np.sum(PDOS[i:i+3]) + np.sum(PDOS[i+3*N:i+3*N+3])
-
+    LDOS = calc_LDOS(folder, E_range)
     z     = np.load(folder + "pos_z.npy")
 
     soll_shape = (14,14, 30)
@@ -729,3 +685,181 @@ def plot_DOS_z_vert(folder, E_range, axis=None, fontsize=16, xlim=None, linewidt
         axis.set_xlim(xlim)
 
     axis.tick_params(labelsize=fontsize)
+
+def get_pos_array(fol):
+    n_atm = np.load(fol + "pos_x.npy").shape[0]
+
+    pos = np.zeros((n_atm, 3))
+    pos[:,0] = np.load(fol + "pos_x.npy")
+    pos[:,1] = np.load(fol + "pos_y.npy")
+    pos[:,2] = np.load(fol + "pos_z.npy")
+    
+    return pos
+
+def get_m_cart_array(fol):
+    n_atm = np.load(fol + "pos_x.npy").shape[0]
+
+    phi   = np.load(fol + "m_phi.npy")
+    theta = np.load(fol + "m_theta.npy")
+
+    m      = np.zeros((n_atm, 3))
+    m[:,0] = np.sin(theta) * np.cos(phi)
+    m[:,1] = np.sin(theta) * np.sin(phi)
+    m[:,2] = np.cos(theta)
+    
+    return m
+
+def tertrahedron_volume(tetra, pos):
+    a = pos[tetra[0]]
+    b = pos[tetra[1]]
+    c = pos[tetra[2]]
+    d = pos[tetra[3]]
+
+    ad = a - d
+    bd = b - d
+    cd = c - d
+    
+    return np.abs(
+                  np.dot(ad, np.cross(bd, cd))
+                  )/6
+
+
+def get_tetrahedron(fol):
+    pos  = get_pos_array(fol)
+    elem = []
+
+    for i in range(pos.shape[0]):
+        conn = pos - pos[i,:]
+        dist = np.sum(conn**2, axis=1)
+
+        neigh = np.argwhere(np.abs(dist - 1.0) < 1e-6).tolist()
+
+        for comb in combinations(neigh, 3):
+            tetr = sorted([i, comb[0][0], comb[1][0], comb[2][0]])
+
+        if(tertrahedron_volume(tetr, pos) > 1e-6):
+            if tetr not in elem:
+                elem.append(tetr)
+
+    return elem
+
+def order_triangle_n(tri, n, pos):
+    A = pos[tri[0],:]
+    B = pos[tri[1],:]
+    C = pos[tri[2],:]
+
+    v1 = A - B
+    v2 = A - C
+
+    new_n = np.cross(v1,v2)
+
+    if(np.dot(n, new_n) > 0):
+        return tri
+    elif(np.dot(n, new_n) < 0):
+        return [tri[1], tri[0], tri[2]]
+    else:
+        print("v1 = {}".format(v1))
+        print("v2 = {}".format(v2))
+        print("new_n = {}".format(new_n))
+        print("n . new_n = {}".format(np.dot(n, new_n)))
+        print("n = {}".format(n))
+        sys.exit("Can't order triangle")
+        return None
+
+def get_norm_triang(tri, pos, centroid_tetr, show=False):
+    A = pos[tri[0],:]
+    B = pos[tri[1],:]
+    C = pos[tri[2],:]
+
+    centroid_tri = get_centeroid_tri(tri, pos)
+    conn = centroid_tri - centroid_tetr
+
+    if(show):
+        print("conn = {}".format(conn))
+        print("centeroid_tri = {}".format(centroid_tri))
+        print("centeroid_tetr = {}".format(centroid_tetr))
+
+    v1 = A - B
+    v2 = A - C
+
+    n   = np.cross(v1,v2)
+    n  /= np.linalg.norm(n)
+    dot = np.dot(n, conn)
+    n  *= np.sign(dot)
+
+    return n
+
+def get_centeroid_tetr(tetr, pos):
+    return (  pos[tetr[0], :]
+            + pos[tetr[1], :]
+            + pos[tetr[2], :]
+            + pos[tetr[3], :])/4.0
+
+def get_centeroid_tri(tetr, pos):
+    return (  pos[tetr[0], :]
+            + pos[tetr[1], :]
+            + pos[tetr[2], :])/3.0
+
+def chiral_contrib_tri(triangle, pos, n, m):
+    tri = order_triangle_n(triangle, n, pos)
+
+    s_i = m[tri[0]]
+    s_j = m[tri[1]]
+    s_k = m[tri[2]]
+
+    return np.dot(s_i, np.cross(s_j, s_k)) * n
+
+def chiral_contrib_tetra(tetr, pos, m):
+    contrib = np.zeros(3)
+    tetr_centeroid = get_centeroid_tetr(tetr, pos)
+
+    for tri in combinations(tetr, 3):
+        n_tri = get_norm_triang(tri, pos, tetr_centeroid)
+        contrib += chiral_contrib_tri(tri, pos, n_tri, m)
+
+    return contrib
+
+def get_chiral_vector_q(fol):
+    pos      = get_pos_array(fol)
+    m        = get_m_cart_array(fol)
+    elements = get_tetrahedron(fol)
+
+    contrib = np.zeros(3)
+
+    for elem in elements:
+        contrib += chiral_contrib_tetra(elem, pos, m)
+    
+    return contrib
+
+def get_local_chiral_contrib(fol):
+    pos      = get_pos_array(fol)
+    m        = get_m_cart_array(fol)
+    elements = get_tetrahedron(fol)
+
+    loc_contrib = np.zeros(pos.shape)
+
+    for tetr in elements:
+        tetr_centeroid = get_centeroid_tetr(tetr, pos)
+        for tri in combinations(tetr, 3):
+            n_tri = get_norm_triang(tri, pos, tetr_centeroid)
+            tri_contrib = chiral_contrib_tri(tri, pos, n_tri, m)
+
+            for pt in tri:
+                loc_contrib[pt] += tri_contrib/3.0
+    return loc_contrib
+
+def weight_chiral_with_LDOS(fol, E_range):
+    LDOS = calc_LDOS(fol, E_range)
+    Xi   = get_local_chiral_contrib(fol)
+    return np.dot(LDOS, Xi)
+
+def yuriys_weird_gradient_thing(fol):
+    pos = get_pos_array(fol)
+ 
+    m   = get_m_cart_array(fol)
+
+    vec = np.zeros(3)
+    for i in range(pos.shape[0]):
+        vec += np.cross(pos[i,:], m[i,:])
+
+    return vec
