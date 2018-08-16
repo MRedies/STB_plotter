@@ -11,6 +11,8 @@ import matplotlib.tri as tri
 import matplotlib.image as mpimg
 from glob import glob
 from itertools import combinations
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
+from mpl_toolkits.axes_grid1.colorbar import colorbar
 
 def calc_kpts(n_sec, pts_per_sec):
     return n_sec * (pts_per_sec - 1) + 1
@@ -256,7 +258,7 @@ def calc_LDOS(folder, E_window):
     cnt     = 0
     for i in range(0, n_up,3):
         i_down = i + n_up
-        loc_dos[cnt] = np.sum(pdos[i:i+2]) + np.sum(pdos[i_down:i_down+2])
+        loc_dos[cnt] = np.sum(pdos[i:i+3]) + np.sum(pdos[i_down:i_down+3])
         cnt += 1
 
     return loc_dos
@@ -608,6 +610,7 @@ def plot_DOS_xz(folder, y_val, E_range, axis=None, fig=None,  fontsize=16, nlvls
 
     if(axis is None):
         _, axis = plt.subplots(1,1)
+
     
     cbar = axis.contourf(x,z, LDOS, levels=lvls)
     axis.set_xlabel("X", fontsize=fontsize)
@@ -623,7 +626,9 @@ def plot_DOS_xz(folder, y_val, E_range, axis=None, fig=None,  fontsize=16, nlvls
     axis.set_ylim=([-0.5, 29.5])
     axis.tick_params(labelsize=fontsize)
 
-def plot_DOS_yz(folder, x_val, E_range, axis=None, fig=None, fontsize=16, nlvls=10, color_range=None, soll_shape=(30,14)):
+def plot_DOS_yz(folder, x_val, E_range, axis=None, fig=None, fontsize=16, nlvls=10, color_range=None, 
+                soll_shape=(30,14), scale=5, width=0.02, shrink=1.0, cmap_name="viridis", max_scale_fac=1.01,
+                arrow_color="k"):
     LDOS = calc_LDOS(folder, E_range)
     x     = np.load(folder + "pos_x.npy")
     y     = np.load(folder + "pos_y.npy")
@@ -644,23 +649,39 @@ def plot_DOS_yz(folder, x_val, E_range, axis=None, fig=None, fontsize=16, nlvls=
     m_y  = np.sin(theta) * np.sin(phi)
     m_z  = np.cos(theta)
 
+    #LDOS /= np.max(LDOS)
+    #LDOS -= np.mean(LDOS)
 
-    if(color_range is None):
-        lvls = np.linspace(np.min(LDOS), np.max(LDOS), nlvls)
-    else:
+    #print("now mean = {}".format(np.mean(LDOS)))
+
+    if(color_range is not None):
         lvls = np.linspace(color_range[0], color_range[1], nlvls)
+    else:
+        lvls = np.linspace(np.min(LDOS), np.max(LDOS) * max_scale_fac, nlvls)
+        
     if(axis is None):
         _, axis = plt.subplots(1,1)
+
+    cbar = axis.contourf(y,z, LDOS, levels=lvls, cmap=plt.get_cmap(cmap_name))
+    ax2_divider = make_axes_locatable(axis)
+    cax2 = ax2_divider.append_axes("top", size="3%", pad="0%")
+
+
+    #ticks = [np.floor(lvls[0]*100)/100, np.ceil(100*lvls[-1])/100]
+    ticks = np.linspace(lvls[0], lvls[-1],5)
+    #ticks = []
+
     
-    cbar = axis.contourf(y,z, LDOS, levels=lvls)
-    axis.set_xlabel("Y", fontsize=fontsize)
-    axis.set_ylabel("Z", fontsize=fontsize)
-    axis.set_title("Cut at x = {}".format(x_val), fontsize=fontsize)
+    cb2 = colorbar(cbar, cax=cax2, orientation="horizontal", ticks=ticks)
+    cax2.xaxis.set_ticks_position("top")
+    cax2.xaxis.set_ticklabels(ticks,rotation=90)
+    cax2.tick_params(length=25, width=5)
+    cb2.ax.tick_params(labelsize=fontsize)
 
-    cb = fig.colorbar(cbar, ax=axis, ticks=lvls[::3])
-    cb.ax.tick_params(labelsize=fontsize)
+    #cb = fig.colorbar(cbar, ax=axis, ticks=lvls[::3], orientation="horizontal", pad=0.03)
+    #cb.ax.tick_params(labelsize=fontsize)
 
-    axis.quiver(y,z,m_y, m_z, units="inches")
+    axis.quiver(y,z,m_y, m_z, scale=scale, units="inches", width=width, color=arrow_color)
     axis.set_xlim([-7,7])
     axis.set_ylim([-0.5, 29.5])
     axis.tick_params(labelsize=fontsize)
@@ -863,3 +884,69 @@ def yuriys_weird_gradient_thing(fol):
         vec += np.cross(pos[i,:], m[i,:])
 
     return vec
+
+def get_ovf_seg_count(infile):
+    with open(infile) as f:
+        for line in f:
+            if "# Segment count:" in line:
+                return int(line.split(":")[-1])
+    return None
+
+def make_ovf_grid(n_spins):
+    h = n_spins // (30*30)
+
+    z =  np.arange(h)
+
+    x =  np.arange(30, dtype=np.float)
+    x -= np.mean(x)
+
+    y =  np.arange(30, dtype=np.float)
+    y -= np.mean(y)
+
+    # this order is weird for some miraculas reason
+    Y,X,Z = np.meshgrid(x,y,z)
+
+    X = X.flatten("F")
+    Y = Y.flatten("F")
+    Z = Z.flatten("F")
+
+    return X, Y, Z
+
+def convert_ovf_to_mag(infile, outifle):
+    raw_data = np.loadtxt(infile)
+    n_seg    = get_ovf_seg_count(infile)
+    n_spins  = raw_data.shape[0] // n_seg
+    
+    m = []
+    for i in range(n_seg):
+        m = raw_data[i*n_spins:(i+1)*n_spins,:]
+        X, Y, Z = make_ovf_grid(n_spins)
+        
+        x_sel = np.logical_and(X > -7, X < 7)
+        y_sel = np.logical_and(Y > -7, Y < 7)
+        sel = np.logical_and(x_sel, y_sel)
+
+        X = X[sel]
+        Y = Y[sel]
+        Z = Z[sel]
+        m = m[sel,:]
+
+        data = np.zeros((X.shape[0], 6))
+
+        data[:,0] = X
+        data[:,1] = Y
+        data[:,2] = Z
+        data[:,3:] = m
+        
+        n_z = np.unique(Z).shape[0]
+
+        with open("gideon_{:03d}.txt".format(i), "w") as out_file:
+            out_file.write("# {:d} {:d} {:d}\n".format(14,14, n_z))
+
+            for k in range(data.shape[0]):
+                for j in range(6):
+                    out_file.write("{:f} ".format(data[k,j]))
+                out_file.write("\n")
+            out_file.write("# 2\n14.000000   0.000000   0.000000\n0.000000  14.000000   0.000000")
+
+        print(i)
