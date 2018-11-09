@@ -39,9 +39,22 @@ def get_unit(folder, name):
     print("cant find unit 2")
     return " "
 
+def get_hc(fol, E=2.1):
+    hc_E = np.load(fol + "hall_cond_E.npy")
+    idx = np.argmin(np.abs(hc_E - E))
 
-def plot_square_lattice(root, linesty='',
-        figsize=(8,6), axis=None, linelabel=None, color=None):
+    try: 
+        hc = np.load(fol + "hall_cond.npy")
+    except:
+        files = sorted(glob(fol + "hall_cond_iter*.npy"))
+        hc = np.load(files[-1])
+
+    return hc[idx]
+
+
+
+def plot_square_lattice(root, linesty='', fontsize=16,
+        figsize=(8,6), axis=None, linelabel=None, color=None, lw=2):
     if axis is None:
         fig, axis = plt.subplots(figsize=figsize)
     else:
@@ -60,19 +73,26 @@ def plot_square_lattice(root, linesty='',
 
     k = np.arange(E.shape[0])
     if linelabel is None:
-        axis.plot(k,E, linesty, color=color)
+        axis.plot(k,E, linesty, color=color, lw=lw)
         if(E_fermi != None):
-            axis.plot(k,np.ones(np.shape(k)) * E_fermi, color=color)
+            axis.plot(k,np.ones(np.shape(k)) * E_fermi, color=color, lw=lw)
     else:
-        axis.plot(k,E, linesty, label=linelabel, color=color)
+        axis.plot(k,E, linesty, label=linelabel, color=color, lw=lw)
         if(E_fermi != None):
-            axis.plot(k,np.ones(np.shape(k)) * E_fermi, color=color)
+            axis.plot(k,np.ones(np.shape(k)) * E_fermi, color=color, lw=lw)
 
     axis.set_xticks(ticks)
     axis.set_xticklabels(label)
     axis.set_ylabel(get_unit(root, 'energy'), fontsize=25)
     dE = np.max([np.max(E) - np.min(E), 0.01])
+
+    axis.set_xlim([k[0], k[-1]])
     axis.set_ylim([np.min(E)-0.03*dE, np.max(E)+0.03*dE])
+    
+    axis.tick_params(axis='both', which='major', labelsize=fontsize)
+    axis.tick_params(axis='both', which='minor', labelsize=fontsize)
+
+
     axis.xaxis.grid(True)
 
     return fig, axis
@@ -121,6 +141,7 @@ def plot_hex_lattice(root, linesty='', ylim=None, linewidth=1, fontsize=16,
     axis.set_ylim(ylim)
     axis.set_xlim([np.min(k), np.max(k)])
     axis.xaxis.grid(True)
+
 
     return fig, axis
 
@@ -626,6 +647,21 @@ def plot_DOS_xz(folder, y_val, E_range, axis=None, fig=None,  fontsize=16, nlvls
     axis.set_ylim=([-0.5, 29.5])
     axis.tick_params(labelsize=fontsize)
 
+def plot_DOS_line_z(folder, x_val, y_val, E_range, axis=None, soll_shape=(30,), label=""):
+    LDOS = calc_LDOS(folder, E_range)
+    x     = np.load(folder + "pos_x.npy")
+    y     = np.load(folder + "pos_y.npy")
+    z     = np.load(folder + "pos_z.npy")
+
+    sel = np.logical_and(np.abs(x-x_val) < 1e-6, np.abs(y-y_val) < 1e-6)
+
+    LDOS  = LDOS[sel].reshape(soll_shape)
+    x     = x[sel].reshape(soll_shape)
+    y     = y[sel].reshape(soll_shape)
+    z     = z[sel].reshape(soll_shape)
+
+    axis.plot(z, LDOS, label=label)
+
 def plot_DOS_yz(folder, x_val, E_range, axis=None, fig=None, fontsize=16, nlvls=10, color_range=None, 
                 soll_shape=(30,14), scale=5, width=0.02, shrink=1.0, cmap_name="viridis", max_scale_fac=1.01,
                 arrow_color="k"):
@@ -668,8 +704,8 @@ def plot_DOS_yz(folder, x_val, E_range, axis=None, fig=None, fontsize=16, nlvls=
 
 
     #ticks = [np.floor(lvls[0]*100)/100, np.ceil(100*lvls[-1])/100]
-    ticks = np.linspace(lvls[0], lvls[-1],5)
-    #ticks = []
+    #ticks = np.linspace(lvls[0], lvls[-1],5)
+    ticks = []
 
     
     cb2 = colorbar(cbar, cax=cax2, orientation="horizontal", ticks=ticks)
